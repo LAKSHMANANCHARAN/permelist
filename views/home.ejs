@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>home</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body class="body-container">
+
+  <h1 id="main-heading">Vanakam da mapla</h1>
+
+  <form action="add" method="post" class="add-form">
+    <label for="task" class="form-label">ENTER TASK</label>
+    <input type="text" value="<%- name %>" name="user" hidden>
+    <input name="task" type="text" class="task-input">
+    <input type="submit" value="Add Task" class="submit-btn">
+  </form>
+
+  <div class="task-list-container">
+    <ul class="task-list">
+      <% if (Array.isArray(hobby)) { %>
+        <% hobby.forEach(item => { %>
+          <li class="task-item"><%= item %></li>
+
+          <!-- Delete Form -->
+          <form action="/delete" method="post" class="task-form delete-form">
+            <input type="hidden" name="user" value="<%= name %>">
+            <input type="hidden" name="task" value="<%= item %>">
+            <button type="submit" class="delete-btn">Delete</button>
+          </form>
+
+          <!-- Edit Form -->
+          <form action="/edit" method="post" class="task-form edit-form">
+            <input type="hidden" name="user" value="<%= name %>">
+            <input type="hidden" name="oldtask" value="<%= item %>">
+            <input type="text" name="newtask" placeholder="Enter new hobby" required class="edit-input">
+            <button type="submit" class="edit-btn">Edit</button>
+          </form>
+        <% }) %>
+      <% } else { %>
+        <li class="task-item"><%= hobby %></li>
+      <% } %>
+    </ul>
+  </div>
+
+</body>
+</html>
