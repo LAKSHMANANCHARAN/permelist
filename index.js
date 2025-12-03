@@ -127,8 +127,6 @@ app.post("/edit", async (req, res) => {
 // LOGOUT
 app.get("/logout", async (req, res) => {
   try {
-    const username = req.query.user; // pass ?user=<username> in logout link
-    if (username) await redis.del(`user:${username}`); // clear Redis cache
     res.render("index.ejs");
   } catch (err) {
     console.error(err);
