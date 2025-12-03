@@ -8,15 +8,23 @@
 </head>
 <body class="body-container">
 
-  <h1 id="main-heading">Vanakam da mapla</h1>
+  <div class="header">
+    <h1 id="main-heading">Vanakam da mapla</h1>
+    
+    <!-- Logout Form -->
+    <form action="/logout" method="post" class="logout-form">
+      <input type="hidden" name="user" value="<%= name %>">
+      <button type="submit" class="logout-btn">Logout</button>
+    </form>
+  </div>
 
-  <form action="add" method="post" class="add-form">
+  <form action="/add" method="post" class="add-form">
     <label for="task" class="form-label">ENTER TASK</label>
     <input type="text" value="<%- name %>" name="user" hidden>
-    <input name="task" type="text" class="task-input">
+    <input name="task" type="text" class="task-input" placeholder="Add a hobby">
     <input type="submit" value="Add Task" class="submit-btn">
   </form>
-
+  
   <div class="task-list-container">
     <ul class="task-list">
       <% if (Array.isArray(hobby)) { %>

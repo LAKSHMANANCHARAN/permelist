@@ -1,13 +1,15 @@
 import express from "express";
 import bodyParser from "body-parser";
 import pg from "pg";
-import bcrypt, { hash } from "bcrypt";
+import bcrypt from "bcrypt";
+import { createClient } from "redis";
 
+const app = express();
+app.use(express.static("public"));
+app.use(bodyParser.urlencoded({ extended: true }));
+app.set("view engine", "ejs");
 
-
-const app=express();
-app.use(express.static("public")); // if style.css is in public/
-
+// PostgreSQL setup
 const db = new pg.Client({
   user: "postgres",
   host: "localhost",
@@ -16,125 +18,116 @@ const db = new pg.Client({
   port: 5432,
 });
 db.connect();
-app.use(bodyParser.urlencoded({extended:true}));
 
+// Redis setup
+const redis = createClient({ url: "redis://localhost:6379" });
+redis.connect().then(() => console.log("Redis connected")).catch(console.error);
 
-
-app.get("/",(req,res)=>{
-    res.render("index.ejs")
+// Routes
+app.get("/", (req, res) => {
+  res.render("index.ejs");
 });
 
-
-app.get("/register",(req,res)=>{
-    res.render("register.ejs")
+app.get("/register", (req, res) => {
+  res.render("register.ejs");
 });
 
-
-app.get("/login",(req,res)=>{
-    res.render("signup.ejs")
+app.get("/login", (req, res) => {
+  res.render("signup.ejs");
 });
 
+// REGISTER
+app.post("/register", async (req, res) => {
+  const { username, password } = req.body;
+  try {
+    const checkUser = await db.query("SELECT * FROM details WHERE name = $1", [username]);
+    if (checkUser.rows.length > 0) return res.send("User already exists");
 
-app.post("/register",async(req,res)=>{
-    const user=req.body.username;
-    const password=req.body.password;
-    try{
-        const checkresult=await db.query("select * from details where name=($1)",[user]);
-        if (checkresult.rows.length>0){
-            res.send("this email is already available");
-        }
-        else{
-            bcrypt.hash(password,10,async(err,hash)=>{
-                if(err){
-                    console.log(err)
-                }
-                else{
-                    db.query("insert into details(name,password)values($1,$2)",[user,hash])
-                    res.render("signup.ejs")
-                }
-            })
-        }
+    const hash = await bcrypt.hash(password, 10);
+    await db.query("INSERT INTO details(name, password) VALUES($1, $2)", [username, hash]);
+    res.render("signup.ejs");
+  } catch (err) {
+    console.error(err);
+  }
+});
+
+// LOGIN with Redis caching
+app.post("/signup", async (req, res) => {
+  const { username, password } = req.body;
+  const cacheKey = `user:${username}`;
+
+  try {
+    // 1️⃣ Check Redis
+    const cachedUser = await redis.get(cacheKey);
+    if (cachedUser) {
+      const parsed = JSON.parse(cachedUser);
+      const match = await bcrypt.compare(password, parsed.password);
+      if (match) return res.render("home.ejs", { name: username, hobby: parsed.hobbies });
+      else return res.send("Wrong password");
     }
-    catch(err){
-        console.log(err)
 
-    }
-})
+    // 2️⃣ If not in Redis → PostgreSQL
+    const result = await db.query("SELECT * FROM details WHERE name = $1", [username]);
+    if (result.rows.length === 0) return res.send("User does not exist");
 
+    const user = result.rows[0];
+    const match = await bcrypt.compare(password, user.password);
+    if (!match) return res.send("Wrong password");
 
+    const hobbies = user.hobbies || [];
 
+    // 3️⃣ Store in Redis for 1 hour
+    await redis.setEx(cacheKey, 3600, JSON.stringify({ name: username, password: user.password, hobbies }));
 
-app.post("/signup",async(req,res)=>{
-    const usern=req.body.username;
-    const password=req.body.password;
+    res.render("home.ejs", { name: username, hobby: hobbies });
 
-    try{
-        const check=await db.query("select * from details where name=($1)",[usern]);
-        if(check.rows.length>0){
-            const user = check.rows[0];
-            const storedPassword = user.password;
-            bcrypt.compare(password,storedPassword,async(err,result)=>{
-                if(err){
-                    console.log(err);
-                }
-                else{
-                    if(result){
-                    const hobbyResult = await db.query("SELECT hobbies FROM details WHERE name = $1", [usern]);
-                    const hobby = hobbyResult.rows.length > 0 ? hobbyResult.rows[0].hobbies : [];
-                    res.render("home.ejs", { name: usern, hobby: hobby });
-                    }
-                    else{
-                        res.send("wrong password")
-                    }
-                }
-            })
-        }
-        else{
-            res.send("user name not exist")
-        }
-    }
-    catch(err){
-        console.log(err)
-    }
-})
+  } catch (err) {
+    console.error(err);
+  }
+});
 
+// ADD hobby
+app.post("/add", async (req, res) => {
+  const { task, user } = req.body;
+  await db.query("UPDATE details SET hobbies = array_append(hobbies, $1) WHERE name = $2", [task, user]);
+  const hobbyRes = await db.query("SELECT hobbies FROM details WHERE name = $1", [user]);
+  const hobbies = hobbyRes.rows[0].hobbies;
 
+  await redis.setEx(`user:${user}`, 3600, JSON.stringify({ name: user, hobbies }));
+  res.render("home.ejs", { name: user, hobby: hobbies });
+});
 
-app.post("/add",async(req,res)=>{
-    const task=req.body.task;
-    const user = req.body.user;
-    const result =  await db.query(
-"UPDATE details SET hobbies = array_append(hobbies, $1) WHERE name = $2",
-  [task, user]
-)
-    const hobbyResult = await db.query("SELECT hobbies FROM details WHERE name = $1", [user]);
-    const hobby = hobbyResult.rows.length > 0 ? hobbyResult.rows[0].hobbies : [];
-    res.render("home.ejs", { name: user, hobby: hobby });
-})
-app.post("/delete",async(req,res)=>{
-    const task=req.body.task;
-    const user=req.body.user;
-    await db.query("UPDATE details SET hobbies = array_remove(hobbies, $1) WHERE name = $2",[task,user]);
-    const hobbyResult = await db.query("SELECT hobbies FROM details WHERE name = $1", [user]);
-    const hobby = hobbyResult.rows.length > 0 ? hobbyResult.rows[0].hobbies : [];
-    res.render("home.ejs", { name: user, hobby: hobby });
-})
+// DELETE hobby
+app.post("/delete", async (req, res) => {
+  const { task, user } = req.body;
+  await db.query("UPDATE details SET hobbies = array_remove(hobbies, $1) WHERE name = $2", [task, user]);
+  const hobbyRes = await db.query("SELECT hobbies FROM details WHERE name = $1", [user]);
+  const hobbies = hobbyRes.rows[0].hobbies;
 
-app.post("/edit",async(req,res)=>{
-    const user=req.body.user;
-    const existing = req.body.oldtask;
-    const newtask = req.body.newtask;
+  await redis.setEx(`user:${user}`, 3600, JSON.stringify({ name: user, hobbies }));
+  res.render("home.ejs", { name: user, hobby: hobbies });
+});
 
-        await db.query(
-        "UPDATE details SET hobbies = array_replace(hobbies, $1, $2) WHERE name = $3",
-        [existing, newtask, user]
-    );
+// EDIT hobby
+app.post("/edit", async (req, res) => {
+  const { user, oldtask, newtask } = req.body;
+  await db.query("UPDATE details SET hobbies = array_replace(hobbies, $1, $2) WHERE name = $3", [oldtask, newtask, user]);
+  const hobbyRes = await db.query("SELECT hobbies FROM details WHERE name = $1", [user]);
+  const hobbies = hobbyRes.rows[0].hobbies;
 
-    const hobbyResult = await db.query("SELECT hobbies FROM details WHERE name = $1", [user]);
-    const hobby = hobbyResult.rows.length > 0 ? hobbyResult.rows[0].hobbies : [];
-    res.render("home.ejs", { name: user, hobby: hobby });
-})
+  await redis.setEx(`user:${user}`, 3600, JSON.stringify({ name: user, hobbies }));
+  res.render("home.ejs", { name: user, hobby: hobbies });
+});
+// LOGOUT
+app.post("/logout", async (req, res) => {
+  try {
+    res.render("index.ejs"); // redirect to login page
+  } catch (err) {
+    console.error(err);
+    res.send("Error logging out");
+  }
+});
 
-app.listen(3000,(req,res)=>{
-    console.log("listing")
-})
+app.listen(3000, () => {
+  console.log("Server running on http://localhost:3000");
+});
