@@ -6,51 +6,51 @@
   <title>home</title>
   <link rel="stylesheet" href="/style.css">
 </head>
-<body class="body-container">
+<body>
+<div class="card">
+  <h1>Vanakam da mapla 👋</h1>
 
-  <div class="header">
-    <h1 id="main-heading">Vanakam da mapla</h1>
-    
-    <!-- Logout Form -->
-    <form action="/logout" method="post" class="logout-form">
-      <input type="hidden" name="user" value="<%= name %>">
-      <button type="submit" class="logout-btn">Logout</button>
-    </form>
-  </div>
-
-  <form action="/add" method="post" class="add-form">
-    <label for="task" class="form-label">ENTER TASK</label>
-    <input type="text" value="<%- name %>" name="user" hidden>
-    <input name="task" type="text" class="task-input" placeholder="Add a hobby">
-    <input type="submit" value="Add Task" class="submit-btn">
+  <!-- Logout -->
+  <form action="/logout" method="post" style="text-align:center; margin-bottom:1rem;">
+    <input type="hidden" name="user" value="<%= name %>">
+    <button>Logout</button>
   </form>
-  
-  <div class="task-list-container">
-    <ul class="task-list">
-      <% if (Array.isArray(hobby)) { %>
-        <% hobby.forEach(item => { %>
-          <li class="task-item"><%= item %></li>
 
-          <!-- Delete Form -->
-          <form action="/delete" method="post" class="task-form delete-form">
+  <!-- Add Task -->
+  <form action="/add" method="post">
+    <input type="hidden" name="user" value="<%= name %>">
+    <input type="text" name="task" placeholder="Add a cute hobby 💙">
+    <input type="submit" value="Add Task">
+  </form>
+
+  <ul class="task-list">
+    <% hobby.forEach(item => { %>
+      <li class="task-card">
+
+        <p class="task-text">📝 <%= item %></p>
+
+        <div class="task-btns">
+          
+          <!-- Delete -->
+          <form action="/delete" method="post">
             <input type="hidden" name="user" value="<%= name %>">
             <input type="hidden" name="task" value="<%= item %>">
-            <button type="submit" class="delete-btn">Delete</button>
+            <button>Delete</button>
           </form>
 
-          <!-- Edit Form -->
-          <form action="/edit" method="post" class="task-form edit-form">
+          <!-- Edit -->
+          <form action="/edit" method="post" style="flex:1;">
             <input type="hidden" name="user" value="<%= name %>">
             <input type="hidden" name="oldtask" value="<%= item %>">
-            <input type="text" name="newtask" placeholder="Enter new hobby" required class="edit-input">
-            <button type="submit" class="edit-btn">Edit</button>
+            <input type="text" name="newtask" placeholder="Edit hobby ✏️" required>
+            <button>Edit</button>
           </form>
-        <% }) %>
-      <% } else { %>
-        <li class="task-item"><%= hobby %></li>
-      <% } %>
-    </ul>
-  </div>
 
+        </div>
+
+      </li>
+    <% }) %>
+  </ul>
+</div>
 </body>
 </html>
