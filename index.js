@@ -3,6 +3,9 @@ import bodyParser from "body-parser";
 import pg from "pg";
 import bcrypt from "bcrypt";
 import { createClient } from "redis";
+import dotenv from "dotenv";
+
+dotenv.config(); // Load environment variables from .env file
 
 const app = express();
 app.use(express.static("public"));
@@ -11,30 +14,22 @@ app.set("view engine", "ejs");
 
 // PostgreSQL setup
 const db = new pg.Client({
-  user: "postgres",
-  host: "localhost",
-  database: "authentication",
-  password: "Lakshmanan@1",
-  port: 5432,
+  user: process.env.PG_USER,
+  host: process.env.PG_HOST,
+  database: process.env.PG_DATABASE,
+  password: process.env.PG_PASSWORD,
+  port: process.env.PG_PORT,
 });
-db.connect();
+db.connect().then(() => console.log("PostgreSQL connected")).catch(console.error);
 
 // Redis setup
-const redis = createClient({ url: "redis://localhost:6379" });
+const redis = createClient({ url: process.env.REDIS_URL });
 redis.connect().then(() => console.log("Redis connected")).catch(console.error);
 
 // Routes
-app.get("/", (req, res) => {
-  res.render("index.ejs");
-});
-
-app.get("/register", (req, res) => {
-  res.render("register.ejs");
-});
-
-app.get("/login", (req, res) => {
-  res.render("signup.ejs");
-});
+app.get("/", (req, res) => res.render("index.ejs"));
+app.get("/register", (req, res) => res.render("register.ejs"));
+app.get("/login", (req, res) => res.render("signup.ejs"));
 
 // REGISTER
 app.post("/register", async (req, res) => {
@@ -48,6 +43,7 @@ app.post("/register", async (req, res) => {
     res.render("signup.ejs");
   } catch (err) {
     console.error(err);
+    res.send("Error registering user");
   }
 });
 
@@ -80,9 +76,9 @@ app.post("/signup", async (req, res) => {
     await redis.setEx(cacheKey, 3600, JSON.stringify({ name: username, password: user.password, hobbies }));
 
     res.render("home.ejs", { name: username, hobby: hobbies });
-
   } catch (err) {
     console.error(err);
+    res.send("Error logging in");
   }
 });
 
@@ -118,16 +114,21 @@ app.post("/edit", async (req, res) => {
   await redis.setEx(`user:${user}`, 3600, JSON.stringify({ name: user, hobbies }));
   res.render("home.ejs", { name: user, hobby: hobbies });
 });
+
 // LOGOUT
-app.post("/logout", async (req, res) => {
+app.get("/logout", async (req, res) => {
   try {
-    res.render("index.ejs"); // redirect to login page
+    const username = req.query.user; // pass ?user=<username> in the logout link
+    if (username) {
+      await redis.del(`user:${username}`); // clear Redis cache for this user
+    }
+    res.render("index.ejs");
   } catch (err) {
     console.error(err);
     res.send("Error logging out");
   }
 });
 
-app.listen(3000, () => {
-  console.log("Server running on http://localhost:3000");
-});
+// Dynamic port for deployment
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
