@@ -5,26 +5,35 @@ import bcrypt from "bcrypt";
 import { createClient } from "redis";
 import dotenv from "dotenv";
 
-dotenv.config(); // Load environment variables from .env file
+dotenv.config(); // Load environment variables from .env
 
 const app = express();
 app.use(express.static("public"));
 app.use(bodyParser.urlencoded({ extended: true }));
 app.set("view engine", "ejs");
 
-// PostgreSQL setup
+// PostgreSQL setup (with SSL for Render)
 const db = new pg.Client({
   user: process.env.PG_USER,
   host: process.env.PG_HOST,
   database: process.env.PG_DATABASE,
   password: process.env.PG_PASSWORD,
   port: process.env.PG_PORT,
+  ssl: {
+    rejectUnauthorized: false, // required for Render Postgres
+  },
 });
-db.connect().then(() => console.log("PostgreSQL connected")).catch(console.error);
+
+db.connect()
+  .then(() => console.log("PostgreSQL connected"))
+  .catch(console.error);
 
 // Redis setup
 const redis = createClient({ url: process.env.REDIS_URL });
-redis.connect().then(() => console.log("Redis connected")).catch(console.error);
+redis
+  .connect()
+  .then(() => console.log("Redis connected"))
+  .catch(console.error);
 
 // Routes
 app.get("/", (req, res) => res.render("index.ejs"));
@@ -118,10 +127,8 @@ app.post("/edit", async (req, res) => {
 // LOGOUT
 app.get("/logout", async (req, res) => {
   try {
-    const username = req.query.user; // pass ?user=<username> in the logout link
-    if (username) {
-      await redis.del(`user:${username}`); // clear Redis cache for this user
-    }
+    const username = req.query.user; // pass ?user=<username> in logout link
+    if (username) await redis.del(`user:${username}`); // clear Redis cache
     res.render("index.ejs");
   } catch (err) {
     console.error(err);
