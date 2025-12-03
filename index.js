@@ -215,6 +215,15 @@ app.post("/edit", async (req, res) => {
 app.post("/logout", (req, res) => {
   res.render("index.ejs");
 });
+app.get("/clear-cache", async (req, res) => {
+    try {
+        await redis.flushAll();
+        res.send("Redis cache cleared successfully!");
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Error clearing Redis");
+    }
+});
 
 // -------------------- SERVER --------------------
 const PORT = process.env.PORT || 3000;
